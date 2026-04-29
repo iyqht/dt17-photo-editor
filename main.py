@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog
 
-from PIL import Image, ImageEnhance, ImageTk  # Thêm ImageEnhance để chỉnh độ sáng
+from PIL import Image, ImageEnhance, ImageTk
 
 from controls import BrightnessScale, RotateScale, ZoomScale
 from crop_tool import CropTool
@@ -170,6 +170,39 @@ def flip_image(mode):
         show_image()
 
 
+def save_image():
+    global original_image
+    if original_image:
+        path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[
+                ("PNG files", "*.png"),
+                ("JPEG files", "*.jpg"),
+                ("All files", "*.*"),
+            ],
+        )
+
+        if path:
+            # 1. Áp dụng các hiệu ứng hiện tại vào một bản sao cuối cùng
+            # (Giống hệt quy trình trong hàm show_image nhưng không có bước Zoom)
+            enhancer = ImageEnhance.Brightness(original_image)
+            final_img = enhancer.enhance(brightness_val)
+
+            final_img = final_img.convert("RGBA")
+            final_img = final_img.rotate(
+                rotate_angle, expand=True, resample=Image.BILINEAR
+            )
+
+            # 2. Xử lý định dạng khi lưu
+            # Nếu lưu dạng JPG, phải chuyển về RGB vì JPG không hỗ trợ nền trong suốt (Alpha)
+            if path.lower().endswith((".jpg", ".jpeg")):
+                final_img = final_img.convert("RGB")
+
+            # 3. Tiến hành ghi file
+            final_img.save(path)
+            print(f"Đã lưu ảnh tại: {path}")
+
+
 window = tk.Tk()
 window.title("Ứng dụng Chỉnh sửa Ảnh")
 window.geometry("1500x900+50+50")
@@ -198,7 +231,7 @@ preview_label.pack(pady=5)
 right_frame = tk.Frame(window)
 right_frame.pack(side="left", fill="both", expand=True)
 
-canvas = tk.Canvas(right_frame, highlightthickness=0)
+canvas = tk.Canvas(right_frame, highlightthickness=0, bg="gray")
 canvas.pack(fill="both", expand=True)
 
 # --- CÁC NÚT CÔNG CỤ (DƯỚI CÙNG BÊN TRÁI) ---
@@ -253,6 +286,9 @@ bright_ctrl = BrightnessScale(tools_container, on_brightness_change)
 zoom_ctrl.place(relx=0.99, rely=0.99, anchor=tk.SE)
 rotate_ctrl.pack(pady=5)
 bright_ctrl.pack(pady=5)
+
+btn_save = tk.Button(tools_container, text="Lưu ảnh", command=save_image)
+btn_save.pack()
 
 # --- GẮN CÁC SỰ KIỆN CHUỘT MẶC ĐỊNH ---
 canvas.bind("<Button-1>", drag_start)
