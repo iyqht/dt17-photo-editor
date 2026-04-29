@@ -1,3 +1,10 @@
+```
+git clone https://github.com/iyqht/dt17-photo-editor.git
+cd dt17-photo-editor
+pip install pillow
+python main.py
+```
+
 ## 1. File `controls.py` (Các thanh điều khiển)
 File này định nghĩa cách các thanh trượt (Scale) và nút bấm hoạt động.
 
