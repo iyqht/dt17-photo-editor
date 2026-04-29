@@ -1,61 +1,43 @@
-# ⚙️ Luồng vận hành kỹ thuật (Technical Documentation)
+## 1. File `controls.py` (Các thanh điều khiển)
+File này định nghĩa cách các thanh trượt (Scale) và nút bấm hoạt động.
 
-Tài liệu này giải thích cách hệ thống xử lý dữ liệu hình ảnh, quản lý trạng thái và ánh xạ tọa độ giữa giao diện người dùng (GUI) và tệp tin ảnh gốc.
-
----
-
-## 1. Kiến trúc phân tầng (Software Architecture)
-
-Ứng dụng được chia thành 3 Module độc lập để tách biệt trách nhiệm (Separation of Concerns):
-
-* **`controls.py` (Giao diện điều khiển):** Đóng gói logic của các UI Widget. Sử dụng tính **Kế thừa (Inheritance)** để tạo ra các bộ điều khiển có hành vi tương tự nhưng tham số khác nhau.
-* **`crop_tool.py` (Xử lý hình học):** Một module chuyên biệt dùng để tính toán ma trận tọa độ. Nó không trực tiếp sửa ảnh mà chỉ tính toán "vùng quan tâm" và gửi kết quả về Main.
-* **`main.py` (Luồng chính & Pipeline):** Đóng vai trò bộ điều phối (Orchestrator). Lưu trữ các biến trạng thái toàn cục và quản lý quy trình biến đổi ảnh (Image Processing Pipeline).
+* **`class Base`**: Đây là "khuôn mẫu" chung. Thay vì viết code lặp đi lặp lại cho 3 thanh trượt, mình thiết kế một bộ khung duy nhất và tái sử dụng nó.
+* **`self.var`**: Sử dụng `tk.DoubleVar` để liên kết giá trị của thanh trượt với biến số. Khi người dùng kéo thanh hoặc dùng chuột cuộn, biến này tự động đồng bộ hai chiều.
+* **`self.header`**: Chứa tên công cụ và con số hiện tại (ví dụ: *"Độ sáng 1.2"*). Việc tách số ra khỏi thanh trượt giúp giao diện phẳng và gọn gàng hơn.
+* **`on_change`**: Đây là "cầu nối". Mỗi khi giá trị thay đổi, nó sẽ gọi hàm `callback` truyền sang `main.py` để xử lý ảnh ngay lập tức.
+* **`decrease` / `increase`**: Logic cho nút `[-]` và `[+]`. Nó lấy giá trị hiện tại cộng/trừ với bước nhảy (`resolution`) và dùng `max`/`min` để đảm bảo giá trị luôn nằm trong giới hạn an toàn.
+* **Các lớp con (`ZoomScale`, `RotateScale`, `BrightnessScale`)**: Kế thừa từ `Base` và chỉ cần nạp vào các thông số riêng (như độ sáng từ $0.0$ đến $2.0$, góc xoay từ $0$ đến $360$).
 
 ---
 
-## 2. Quy trình xử lý ảnh (Image Processing Pipeline)
+## 2. File `crop_tool.py` (Công cụ cắt ảnh)
+Đây là module xử lý logic toán học và hình học phức tạp nhất của dự án.
 
-Mỗi khi có một thông số thay đổi (Zoom, Rotate, Brightness), ảnh không được hiển thị ngay mà phải đi qua một Pipeline trong hàm `show_image()` theo thứ tự cố định để đảm bảo tính nhất quán:
-
-1.  **Enhancement (Pillow):** Áp dụng độ sáng lên đối tượng `original_image`.
-2.  **Color Conversion:** Chuyển hệ màu sang **RGBA**. Bước này bắt buộc để tạo kênh Alpha (trong suốt), giúp các vùng trống phát sinh khi xoay ảnh không bị đen.
-3.  **Rotation:** Xoay ảnh với tham số `expand=True`. Thuật toán sẽ tính toán lại kích thước khung hình mới để chứa vừa vặn các đỉnh của ảnh đã xoay.
-4.  **Resampling (Optimization):** * Khi người dùng đang thao tác: Sử dụng thuật toán `NEAREST` để giảm tải cho CPU, giúp UI mượt mà.
-    * khi người dùng dừng thao tác: Sử dụng thuật toán `LANCZOS` để tái lấy mẫu chất lượng cao, khử răng cưa.
-5.  **Canvas Rendering:** Chuyển đổi đối tượng PIL sang `ImageTk.PhotoImage` và cập nhật vào `img_id` trên Canvas.
-
----
-
-## 3. Cơ chế ánh xạ tọa độ (Coordinate Mapping)
-
-Đây là logic cốt lõi của công cụ Cắt (Crop). Có sự khác biệt giữa tọa độ trên màn hình (Canvas) và tọa độ trên tệp tin thực tế (Image Source).
-
-**Bài toán:** Khi ảnh đang được phóng to 200% và nằm lệch ở góc màn hình, làm sao để cắt đúng pixel trên ảnh gốc?
-
-**Giải pháp:** Áp dụng phép chiếu ngược (Inverse Projection):
-1. Xác định vị trí lề của ảnh trên Canvas: `img_left = tâm_ảnh - (chiều_rộng_hiện_tại / 2)`.
-2. Tính khoảng cách từ điểm nhấn chuột đến lề ảnh: `distance = tọa_độ_chuột - img_left`.
-3. Khử hệ số Zoom: `pixel_gốc = distance / zoom_factor`.
-
-Kết quả cuối cùng là một bộ 4 tọa độ (Left, Top, Right, Bottom) tương ứng chính xác với ma trận điểm ảnh của tệp tin gốc.
+* **`activate`**: Khi bấm nút cắt, hàm này "chiếm quyền" chuột. Nó gỡ bỏ các sự kiện kéo thả ảnh thông thường và gắn (bind) các sự kiện vẽ khung cắt vào thay thế.
+* **`drag_motion` & `draw_overlays`**: 
+  * Khi kéo chuột, nó cập nhật tọa độ khung chữ nhật trắng (`rect_id`).
+  * Đồng thời, `draw_overlays` tạo ra 4 hình chữ nhật đen mờ (`gray50`) bao quanh vùng chọn, tạo hiệu ứng "đục lỗ" giúp người dùng tập trung vào vùng ảnh muốn cắt.
+* **`execute_crop` (Trái tim của tính năng)**:
+  * Lấy tọa độ vùng chọn trên màn hình ($x, y$).
+  * Tính toán vị trí lề của ảnh trên Canvas dựa vào tâm ảnh và hệ số zoom hiện tại.
+  * **Công thức ánh xạ ngược**:
+    $$\text{Tọa độ ảnh gốc} = \frac{\text{Tọa độ màn hình} - \text{Vị trí lề ảnh}}{\text{Zoom}}$$
+  * Cuối cùng, dùng lệnh `orig_img.crop()` để trích xuất mảng pixel chính xác từ file gốc.
 
 ---
 
-## 4. Quản lý trạng thái (State & History Management)
+## 3. File `main.py` (Luồng xử lý chính)
+Đây là bộ não điều phối toàn bộ ứng dụng và xử lý đồ họa.
 
-Ứng dụng quản lý lịch sử thông qua cơ chế **Double-Stack (Ngăn xếp kép)**:
-
-* **`undo_stack`**: Lưu trữ các bản sao (Deep Copy) của ảnh gốc trước mỗi thao tác thay đổi cấu trúc (Crop, Flip).
-* **`redo_stack`**: Lưu trữ các trạng thái bị đẩy ra khi thực hiện Undo.
-* **Cơ chế đồng bộ UI:** Khi thực hiện Undo/Redo, ứng dụng không chỉ đổi ảnh mà còn gọi hàm `.set_value()` của các đối tượng trong `controls.py` để đồng bộ vị trí thanh trượt tương ứng với thông số của ảnh đó.
-
----
-
-## 5. Cơ chế Giao tiếp (Communication Pattern)
-
-Ứng dụng sử dụng kỹ thuật **Callback Functions** để các module liên lạc với nhau mà không bị phụ thuộc vòng (Circular Dependency):
-
-* `Main` khởi tạo `Controls` và truyền vào một hàm (callback).
-* Khi người dùng tương tác với `Controls`, nó thực thi hàm đó để báo cho `Main` biết cần cập nhật ảnh.
-* `CropTool` nhận dữ liệu từ `Main` thông qua một hàm trung gian (`get_crop_data`) để đảm bảo nó luôn lấy được giá trị `zoom_factor` mới nhất tại thời điểm cắt.
+* **`update_ui_change` (Debounce Hiệu suất)**: Đây là kỹ thuật chống giật lag (lag-free). Nó dùng `window.after` để phân biệt: Nếu người dùng đang kéo thanh trượt liên tục, nó gọi render chất lượng thấp. Chỉ khi dừng tay $150$ms, nó mới render chất lượng cao.
+* **`show_image(high_quality)`**: Pipeline (quy trình) xử lý ảnh theo đúng thứ tự:
+  1. **Brightness**: Chỉnh độ sáng bằng `ImageEnhance`.
+  2. **RGBA**: Chuyển hệ màu để khi xoay ảnh, các góc lộ ra sẽ trong suốt, hòa vào màu nền Canvas thay vì bị viền đen.
+  3. **Rotate**: Xoay ảnh (dùng `expand=True` để khung hình tự nở ra, không bị cắt mất góc).
+  4. **Resize (Zoom)**: Nếu `high_quality=False`, dùng thuật toán `NEAREST` để chạy cực nhanh. Nếu `True`, dùng `LANCZOS` để khử răng cưa, làm mịn ảnh.
+* **`mouse_wheel` & `drag_motion`**: Bắt sự kiện cuộn chuột để Zoom (có timer giới hạn $0.02$s để chống gọi hàm quá tải) và tính toán khoảng cách `dx, dy` để di chuyển (Pan) ảnh tự do trên màn hình.
+* **Hệ thống Undo/Redo**:
+  * Sử dụng 2 danh sách hoạt động theo nguyên lý Ngăn xếp (Stack): `undo_stack` và `redo_stack`.
+  * **`save_state`**: Luôn chụp lại một bản sao của ảnh hiện tại cất vào `undo_stack` trước khi thực hiện hành động mới (như Cắt, Lật).
+  * **`undo` / `redo`**: Hoán đổi vị trí của bức ảnh giữa hiện tại, quá khứ (undo) và tương lai (redo).
+* **`flip_image`**: Sử dụng hàm `transpose` của Pillow để lật ma trận điểm ảnh theo trục ngang (`FLIP_LEFT_RIGHT`) hoặc trục dọc (`FLIP_TOP_BOTTOM`).
