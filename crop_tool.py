@@ -132,6 +132,22 @@ class CropTool:
         right = (max(x1, x2) - img_left) / zoom_factor
         bottom = (max(y1, y2) - img_top) / zoom_factor
 
+        # max(0, left/top): Ép tọa độ không bao giờ bị âm
+        # min(width/height, right/bottom): Ép tọa độ không bao giờ vượt quá kích thước thật
+        left = max(0, left)
+        top = max(0, top)
+        right = min(orig_img.width, right)
+        bottom = min(orig_img.height, bottom)
+        # ====================================================================
+
+        # Nếu người dùng kéo khung hoàn toàn nằm ngoài ảnh -> Hủy lệnh cắt
+        if left >= right or top >= bottom:
+            self.clear()
+            self.canvas.config(cursor="hand2")
+            if self.on_exit:
+                self.on_exit()
+            return
+
         # 6. Sử dụng thư viện Pillow để cắt ảnh từ file gốc
         # .crop() nhận vào một bộ (left, top, right, bottom)
         cropped_img = orig_img.crop((left, top, right, bottom))
