@@ -28,16 +28,19 @@ redo_stack = []
 def on_zoom_change(val):
     global zoom_factor
     zoom_factor = val / 100  # Chuyển từ % (100) sang hệ số (1.0)
+    show_image()
 
 
 def on_rotate_change(val):
     global rotate_angle
     rotate_angle = val
+    show_image()
 
 
 def on_brightness_change(val):
     global brightness_val
     brightness_val = val
+    show_image()
 
 
 def show_image():
